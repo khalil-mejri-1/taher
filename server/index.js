@@ -104,6 +104,52 @@ app.delete('/api/students/:id', async (req, res) => {
   }
 });
 
+app.patch('/api/students/batch', async (req, res) => {
+  try {
+    const { updates } = req.body; // Array of { id, ...data }
+    const results = [];
+    for (const update of updates) {
+      const { id, ...data } = update;
+      const updated = await Student.findByIdAndUpdate(id, data, { new: true });
+      if (updated) results.push(updated);
+    }
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Settings Schema (for terminatedSessions, weekStartDate, etc.)
+const settingsSchema = new mongoose.Schema({
+  key: { type: String, unique: true },
+  value: mongoose.Schema.Types.Mixed
+});
+const Settings = mongoose.model('Settings', settingsSchema);
+
+// New Routes for Settings
+app.get('/api/settings/:key', async (req, res) => {
+  try {
+    const setting = await Settings.findOne({ key: req.params.key });
+    res.json(setting ? setting.value : null);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/settings', async (req, res) => {
+  try {
+    const { key, value } = req.body;
+    const setting = await Settings.findOneAndUpdate(
+      { key }, 
+      { value }, 
+      { upsert: true, new: true }
+    );
+    res.json(setting.value);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

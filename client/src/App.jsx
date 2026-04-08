@@ -29,6 +29,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './index.css';
 
 
+const API_URL = "https://taher-three.vercel.app/api";
+
 function App() {
   const [students, setStudents] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,17 +51,26 @@ function App() {
   const [confirmDialog, setConfirmDialog] = useState({ show: false, message: '', title: '', type: 'danger', onConfirm: null });
   const [sessionModal, setSessionModal] = useState({ show: false, sessionId: '', sessionName: '' });
   const [isPendingRecord, setIsPendingRecord] = useState(false);
-  const [terminatedSessions, setTerminatedSessions] = useState(() => {
-    const stored = localStorage.getItem('atelierTaherTerminatedSessions');
-    return stored ? JSON.parse(stored) : {};
-  });
+  const [terminatedSessions, setTerminatedSessions] = useState({});
+  const [weekStartDate, setWeekStartDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const [weekStartDate, setWeekStartDate] = useState(() => {
-    const stored = localStorage.getItem('atelierTaherWeekStart');
-    if (stored) return stored;
-    // Default to this Tuesday if possible, or today
-    return new Date().toISOString().split('T')[0];
-  });
+  const fetchSettings = async () => {
+    try {
+      const ts = await fetch(`${API_URL}/settings/terminatedSessions`).then(r => r.json());
+      const wd = await fetch(`${API_URL}/settings/weekStartDate`).then(r => r.json());
+      if (ts) setTerminatedSessions(ts);
+      if (wd) setWeekStartDate(wd);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchStudents();
+      fetchSettings();
+    }
+  }, [isLoggedIn]);
 
   const getDayDate = (baseDate, daysToAdd) => {
     if (!baseDate) return '';
@@ -93,11 +104,7 @@ function App() {
     return 8;
   };
 
-  useEffect(() => {
-    if (isLoggedIn) {
-      fetchStudents();
-    }
-  }, [isLoggedIn]);
+
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -115,26 +122,64 @@ function App() {
     localStorage.removeItem('adminToken');
   };
 
-  const fetchStudents = () => {
-    const stored = localStorage.getItem('atelierTaherData');
-    if (stored) {
-      setStudents(JSON.parse(stored));
-    } else {
-      const initialFakeData = [
-        { id: Date.now() + 1, name: "Mariem Ben Youssef", price: 80, attendance: { tue_m: 0, wed_m: 1, wed_a: 0, sat_m: 0, sat_a: 0, sun_m: 0 }, schedule: { tue_m: true, wed_m: true, wed_a: false, sat_m: false, sat_a: false, sun_m: false }, sessions_count: 2, payment: 'OK', note: "Excellente élève", archived: false, history: [] },
-        { id: Date.now() + 2, name: "Ahmed Chtourou", price: 100, attendance: { tue_m: 0, wed_m: 0, wed_a: 0, sat_m: 0, sat_a: 0, sun_m: 0 }, schedule: { tue_m: true, wed_m: true, wed_a: true, sat_m: true, sat_a: true, sun_m: true }, sessions_count: 8, payment: 'RESTE', note: "Doit payer la semaine, retardé", archived: false, history: [] },
-        { id: Date.now() + 3, name: "Salma Trabelsi", price: 120, attendance: { tue_m: 1, wed_m: 1, wed_a: 0, sat_m: 1, sat_a: 0, sun_m: 1 }, schedule: { tue_m: true, wed_m: true, wed_a: false, sat_m: true, sat_a: false, sun_m: true }, sessions_count: 5, payment: 'PENDING', note: "", archived: false, history: [] },
-        { id: Date.now() + 4, name: "Youssef Rekik", price: 80, attendance: { tue_m: 0, wed_m: 0, wed_a: 0, sat_m: 0, sat_a: 0, sun_m: 0 }, schedule: { tue_m: true, wed_m: true, wed_a: true, sat_m: true, sat_a: true, sun_m: true }, sessions_count: 0, payment: 'OK', note: "Arrêté temporairement", archived: true, history: [] }
-      ];
-      setStudents(initialFakeData);
-      localStorage.setItem('atelierTaherData', JSON.stringify(initialFakeData));
+  const fetchStudents = async () => {
+    try {
+      const res = await fetch(`${API_URL}/students`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setStudents(data);
+      } else {
+        console.error("API returned non-array:", data);
+        setStudents([]);
+      }
+    } catch (err) {
+      console.error("Fetch Error:", err);
+      setStudents([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const syncStudent = async (student) => {
+    try {
+      const res = await fetch(`${API_URL}/students/${student.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(student)
+      });
+      const data = await res.json();
+      setStudents(prev => prev.map(s => s.id === data.id ? data : s));
+      return data;
+    } catch (err) {
+      console.error("Sync Error:", err);
+    }
+  };
+
+  const syncBatch = async (updates) => {
+    try {
+      const res = await fetch(`${API_URL}/students/batch`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates })
+      });
+      const data = await res.json();
+      setStudents(prev => {
+        let newList = [...prev];
+        data.forEach(updated => {
+          newList = newList.map(s => s.id === updated.id ? updated : s);
+        });
+        return newList;
+      });
+      return data;
+    } catch (err) {
+      console.error("Batch Sync Error:", err);
+    }
   };
 
   const saveData = (newStudentsData) => {
+    // This is now a legacy helper for batch local updates, 
+    // ideally should be refactored into individual syncStudent calls.
     setStudents(newStudentsData);
-    localStorage.setItem('atelierTaherData', JSON.stringify(newStudentsData));
   };
 
   const displayedStudents = students.filter(s => {
@@ -147,74 +192,61 @@ function App() {
     return matchesSearch && !isArchived && !isPending;
   });
 
-  const toggleArchive = (id) => {
-    const newStudents = students.map(s => s.id === id ? { ...s, archived: !s.archived } : s);
-    saveData(newStudents);
+  const toggleArchive = async (id) => {
+    const student = students.find(s => s.id === id);
+    if (!student) return;
+    const updated = { ...student, archived: !student.archived };
+    await syncStudent(updated);
   };
 
-  const setSessionsCount = (id, count) => {
+  const setSessionsCount = async (id, count) => {
     const student = students.find(s => s.id === id);
     if ((student.sessions_count || 0) === count) return;
-    const newStudents = students.map(s => s.id === id ? { ...s, sessions_count: count } : s);
-    saveData(newStudents);
+    const updated = { ...student, sessions_count: count };
+    await syncStudent(updated);
   };
 
-  const toggleAttendance = (studentId, day) => {
+  const toggleAttendance = async (studentId, day) => {
     const student = students.find(s => s.id === studentId);
     const isNowPresent = student.attendance[day] === 0;
-
-    const newStudents = students.map(s => {
-      if (s.id === studentId) {
-        return {
-          ...s,
-          attendance: {
-            ...s.attendance,
-            [day]: isNowPresent ? 1 : 0
-          }
-        };
+    const updated = {
+      ...student,
+      attendance: {
+        ...student.attendance,
+        [day]: isNowPresent ? 1 : 0
       }
-      return s;
-    });
-
-    saveData(newStudents);
+    };
+    await syncStudent(updated);
   };
 
-  const setAttendanceStatus = (studentId, day, isPresent) => {
+  const setAttendanceStatus = async (studentId, day, isPresent) => {
     const student = students.find(s => s.id === studentId);
     const currentlyPresent = student.attendance[day] === 1;
     if (currentlyPresent === isPresent) return;
 
-    const newStudents = students.map(s => {
-      if (s.id === studentId) {
-        return {
-          ...s,
-          attendance: {
-            ...s.attendance,
-            [day]: isPresent ? 1 : 0
-          }
-        };
+    const updated = {
+      ...student,
+      attendance: {
+        ...student.attendance,
+        [day]: isPresent ? 1 : 0
       }
-      return s;
-    });
-    saveData(newStudents);
+    };
+    await syncStudent(updated);
   };
 
   const openSessionModal = (sessionId, sessionName) => {
     setSessionModal({ show: true, sessionId, sessionName });
-  };
-
-  const terminateSession = (sessionId, sessionName) => {
+  }; const terminateSession = (sessionId, sessionName) => {
     if (terminatedSessions[sessionId]) return;
     requestConfirm(
       "Clôturer la séance",
-      `Voulez-vous clôturer la séance "${sessionName}" ? Une séance sera ajoutée au compteur de chaque étudiant programmé, qu'il soit présent ou absent.`,
+      `Voulez-vous clôturer la séance "${sessionName}"?`,
       "info",
-      () => {
-        const newStudents = students.map(s => {
+      async () => {
+        const batchUpdates = [];
+        students.forEach(s => {
           if (s.schedule && s.schedule[sessionId] !== false && !s.archived) {
             const isPresent = s.attendance && s.attendance[sessionId] === 1;
-
-            // Map sessionId to offset days from Tuesday
             const offsets = { tue_m: 0, wed_m: 1, wed_a: 1, sat_m: 4, sat_a: 4, sun_m: 5 };
             const sessionDate = getDayDate(weekStartDate, offsets[sessionId] || 0);
 
@@ -223,74 +255,72 @@ function App() {
               name: sessionName,
               present: isPresent
             };
+            const currentLog = [...(s.session_log || []), newLog];
             const maxS = getMaxSessions(s.schedule);
             let nextCount = (s.sessions_count || 0) + 1;
-            let nextPayment = s.payment;
 
             if (nextCount > maxS) {
               nextCount = 1;
-              nextPayment = 'PENDING';
-            } else if (nextCount === maxS) {
-              nextPayment = 'PENDING';
             }
 
-            const nextUnpaid = s.payment === 'OK' ? 0 : (s.unpaid_count || 0) + 1;
-
-            const total = (s.session_log || []).length + 1;
-            let updatedUnpaid = 0;
+            const total = currentLog.length;
             const currentPaidCycles = s.paid_cycles || [];
+            let recalUnpaid = 0;
             for (let i = 0; i < 12; i++) {
               const rowLogs = Math.max(0, Math.min(maxS, total - i * maxS));
-              if (rowLogs > 0 && !currentPaidCycles.includes(i)) {
-                updatedUnpaid += rowLogs;
-              }
+              if (rowLogs > 0 && !currentPaidCycles.includes(i)) recalUnpaid += rowLogs;
             }
 
-            return {
-              ...s,
+            const nextPayment = recalUnpaid > 0 ? 'PENDING' : 'OK';
+
+            batchUpdates.push({
+              id: s.id,
+              session_log: currentLog,
               sessions_count: nextCount,
-              payment: updatedUnpaid > 0 ? 'PENDING' : 'OK',
-              unpaid_count: updatedUnpaid,
-              session_log: [...(s.session_log || []), newLog]
-            };
+              payment: nextPayment,
+              unpaid_count: recalUnpaid,
+              attendance: { ...s.attendance, [sessionId]: 0 }
+            });
           }
-          return s;
         });
-        saveData(newStudents);
-        const newTerminated = { ...terminatedSessions, [sessionId]: true };
-        setTerminatedSessions(newTerminated);
-        localStorage.setItem('atelierTaherTerminatedSessions', JSON.stringify(newTerminated));
+
+        await syncBatch(batchUpdates);
+        const newTS = { ...terminatedSessions, [sessionId]: true };
+        setTerminatedSessions(newTS);
+        await fetch(`${API_URL}/settings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: "terminatedSessions", value: newTS })
+        });
       }
     );
   };
 
-  const toggleLogStatus = (studentId, globalIndex) => {
-    const newStudents = students.map(s => {
-      if (s.id === studentId && s.session_log) {
-        const newLog = [...s.session_log];
-        const current = newLog[globalIndex];
-        if (!current) return s;
+  const toggleLogStatus = async (studentId, globalIndex) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student || !student.session_log) return;
 
-        let nextStatus;
-        if (current.status === 'delayed') {
-          nextStatus = 'present';
-        } else if (current.present === true || current.status === 'present') {
-          nextStatus = 'absent';
-        } else {
-          nextStatus = 'delayed';
-        }
+    const newLog = [...student.session_log];
+    const current = newLog[globalIndex];
+    if (!current) return;
 
-        newLog[globalIndex] = {
-          ...current,
-          present: nextStatus === 'present',
-          status: nextStatus
-        };
+    let nextStatus;
+    if (current.status === 'delayed') {
+      nextStatus = 'present';
+    } else if (current.present === true || current.status === 'present') {
+      nextStatus = 'absent';
+    } else {
+      nextStatus = 'delayed';
+    }
 
-        return { ...s, session_log: newLog };
-      }
-      return s;
-    });
-    saveData(newStudents);
+    newLog[globalIndex] = {
+      ...current,
+      present: nextStatus === 'present',
+      status: nextStatus
+    };
+
+    const updated = { ...student, session_log: newLog };
+    await syncStudent(updated);
   };
 
   const handlePrintSession = () => {
@@ -380,119 +410,100 @@ function App() {
   const resetWeek = () => {
     requestConfirm(
       "Nouvelle Semaine",
-      "Voulez-vous archiver cette semaine (sauvegarder l'historique) et effacer la grille ? Le compteur des 8 séances sera conservé.",
+      "Voulez-vous archiver cette semaine (sauvegarder l'historique) et effacer la grille ?",
       "info",
-      () => {
+      async () => {
         const currentDate = new Date().toLocaleDateString('fr-FR', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' });
 
-        const updatedStudents = students.map(s => {
-          const pastWeek = {
-            date: currentDate,
-            attendance: { ...(s.attendance || { tue_m: 0, wed_m: 0, wed_a: 0, sat_m: 0, sat_a: 0, sun_m: 0 }) }
-          };
+        const batchUpdates = students.map(s => ({
+          id: s.id,
+          history: [...(s.history || []), { date: currentDate, attendance: { ...(s.attendance || {}) } }],
+          attendance: { tue_m: 0, wed_m: 0, wed_a: 0, sat_m: 0, sat_a: 0, sun_m: 0 }
+        }));
 
-          return {
-            ...s,
-            history: [...(s.history || []), pastWeek],
-            attendance: { tue_m: 0, wed_m: 0, wed_a: 0, sat_m: 0, sat_a: 0, sun_m: 0 }
-          };
-        });
-
-        saveData(updatedStudents);
+        await syncBatch(batchUpdates);
         setTerminatedSessions({});
-        localStorage.removeItem('atelierTaherTerminatedSessions');
+        await fetch(`${API_URL}/settings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "terminatedSessions", value: {} }) });
 
-        // Increment week date by 7 days
         const nextWeek = new Date(weekStartDate);
         nextWeek.setDate(nextWeek.getDate() + 7);
         const nextWeekStr = nextWeek.toISOString().split('T')[0];
         setWeekStartDate(nextWeekStr);
-        localStorage.setItem('atelierTaherWeekStart', nextWeekStr);
+        await fetch(`${API_URL}/settings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "weekStartDate", value: nextWeekStr }) });
       }
     );
   };
 
-  const updatePayment = (id, status, amount = 0) => {
-    const newStudents = students.map(s => {
-      if (s.id === id) {
-        const maxS = getMaxSessions(s.schedule);
-        const total = s.session_log ? s.session_log.length : 0;
-        let newPaidCycles = [...(s.paid_cycles || [])];
-        let nextPartial = s.partial_amount || 0;
+  const updatePayment = async (id, status, amount = 0) => {
+    const student = students.find(s => s.id === id);
+    if (!student) return;
 
-        if (status === 'OK') {
-          // Find first unpaid cycle that has sessions
-          for (let i = 0; i < 12; i++) {
-            const rowLogs = Math.max(0, Math.min(maxS, total - i * maxS));
-            if (rowLogs > 0 && !newPaidCycles.includes(i)) {
-              newPaidCycles.push(i);
-              nextPartial = 0; // Reset partial if they pay a full cycle
-              break;
-            }
-          }
-        } else if (status === 'PENDING') {
-          // Unmark last paid cycle
-          if (newPaidCycles.length > 0) {
-            const last = Math.max(...newPaidCycles);
-            newPaidCycles = newPaidCycles.filter(c => c !== last);
-          }
+    const maxS = getMaxSessions(student.schedule);
+    const total = student.session_log ? student.session_log.length : 0;
+    let newPaidCycles = [...(student.paid_cycles || [])];
+    let nextPartial = student.partial_amount || 0;
+
+    if (status === 'OK') {
+      for (let i = 0; i < 12; i++) {
+        const rowLogs = Math.max(0, Math.min(maxS, total - i * maxS));
+        if (rowLogs > 0 && !newPaidCycles.includes(i)) {
+          newPaidCycles.push(i);
           nextPartial = 0;
-        } else if (status === 'PARTIAL') {
-          nextPartial = amount;
+          break;
         }
-
-        // Recalculate unpaid_count
-        let nextUnpaid = 0;
-        for (let i = 0; i < 12; i++) {
-          const rowLogs = Math.max(0, Math.min(maxS, total - i * maxS));
-          if (rowLogs > 0 && !newPaidCycles.includes(i)) {
-            nextUnpaid += rowLogs;
-          }
-        }
-
-        const finalStatus = (status === 'PARTIAL') ? 'PARTIAL' : (nextUnpaid > 0 ? 'PENDING' : 'OK');
-
-        return {
-          ...s,
-          payment: finalStatus,
-          sessions_count: (finalStatus === 'OK' && (s.sessions_count || 0) === maxS) ? 0 : s.sessions_count,
-          paid_cycles: newPaidCycles,
-          unpaid_count: nextUnpaid,
-          partial_amount: nextPartial
-        };
       }
-      return s;
-    });
-    saveData(newStudents);
+    } else if (status === 'PENDING') {
+      if (newPaidCycles.length > 0) {
+        const last = Math.max(...newPaidCycles);
+        newPaidCycles = newPaidCycles.filter(c => c !== last);
+      }
+      nextPartial = 0;
+    } else if (status === 'PARTIAL') {
+      nextPartial = amount;
+    }
+
+    let nextUnpaid = 0;
+    for (let i = 0; i < 12; i++) {
+      const rowLogs = Math.max(0, Math.min(maxS, total - i * maxS));
+      if (rowLogs > 0 && !newPaidCycles.includes(i)) {
+        nextUnpaid += rowLogs;
+      }
+    }
+
+    const finalStatus = (status === 'PARTIAL') ? 'PARTIAL' : (nextUnpaid > 0 ? 'PENDING' : 'OK');
+
+    const updated = {
+      ...student,
+      payment: finalStatus,
+      sessions_count: (finalStatus === 'OK' && (student.sessions_count || 0) === maxS) ? 0 : student.sessions_count,
+      paid_cycles: newPaidCycles,
+      unpaid_count: nextUnpaid,
+      partial_amount: nextPartial
+    };
+    await syncStudent(updated);
   };
 
-  const updateNote = (id, val) => {
-    const newStudents = students.map(s => s.id === id ? { ...s, note: val } : s);
-    saveData(newStudents);
+  const updateNote = async (id, val) => {
+    const student = students.find(s => s.id === id);
+    if (!student) return;
+    const updated = { ...student, note: val };
+    await syncStudent(updated);
   };
 
-  const addStudent = (e) => {
+  const addStudent = async (e) => {
     e.preventDefault();
-    if (!newStudentName) {
-      alert("يرجى إدخال اسم التلميذ");
-      return;
-    }
-    if (!newStudentPhone) {
-      alert("يرجى إدخال رقم الهاتف");
-      return;
-    }
-    if (!newStudentPrice) {
-      alert("يرجى تحديد المبلغ");
+    if (!newStudentName || !newStudentPhone || !newStudentPrice) {
+      alert("يرجى إكمال جميع البيانات");
       return;
     }
 
     const isAnyDaySelected = Object.values(newStudentSchedule).some(v => v === true);
     if (!isAnyDaySelected) {
-      alert("انتبه: يجب عليك اختيار يوم واحد على الأقل من الجدول الزمني!");
+      alert("يرجى اختيار يوم واحد على الأقل");
       return;
     }
+
     const newS = {
-      id: Date.now(),
       name: newStudentName,
       price: Number(newStudentPrice) || 0,
       phone: newStudentPhone,
@@ -511,7 +522,18 @@ function App() {
       history: []
     };
 
-    saveData([...students, newS]);
+    try {
+      const res = await fetch(`${API_URL}/students`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newS)
+      });
+      const saved = await res.json();
+      setStudents([...students, saved]);
+    } catch (err) {
+      console.error(err);
+    }
+
     setNewStudentName('');
     setNewStudentPrice('');
     setNewStudentPhone('');
@@ -537,32 +559,32 @@ function App() {
     setEditModal(true);
   };
 
-  const saveEdition = (e) => {
+  const saveEdition = async (e) => {
     e.preventDefault();
     if (!editStudentName) return;
 
+    const student = students.find(s => s.id === editingStudentId);
+    if (!student) return;
+
     const isAnyDaySelected = Object.values(editStudentSchedule).some(v => v === true);
     if (!isAnyDaySelected) {
-      alert("انتبه: يجب عليك اختيار يوم واحد على الأقل من الجدول الزمني!");
+      alert("يرجى اختيار يوم واحد على الأقل");
       return;
     }
-    const newStudents = students.map(s => {
-      if (s.id === editingStudentId) {
-        return {
-          ...s,
-          name: editStudentName,
-          price: Number(editStudentPrice) || 0,
-          phone: editStudentPhone,
-          registrationDate: editStudentDate,
-          idCard: editStudentIDImage,
-          schedule: editStudentSchedule,
-          payment: editStudentPayment,
-          partial_amount: editStudentPayment === 'PARTIAL' ? Number(editStudentPartial) : 0
-        };
-      }
-      return s;
-    });
-    saveData(newStudents);
+
+    const updated = {
+      ...student,
+      name: editStudentName,
+      price: Number(editStudentPrice) || 0,
+      phone: editStudentPhone,
+      registrationDate: editStudentDate,
+      idCard: editStudentIDImage,
+      schedule: editStudentSchedule,
+      payment: editStudentPayment,
+      partial_amount: editStudentPayment === 'PARTIAL' ? Number(editStudentPartial) : 0
+    };
+
+    await syncStudent(updated);
     setEditModal(false);
   };
 
@@ -584,10 +606,15 @@ function App() {
   const deleteStudent = (id) => {
     requestConfirm(
       "Suppression Définitive",
-      "Voulez-vous vraiment supprimer cet étudiant ? Cette action est irréversible et supprimera tout son historique.",
+      "Voulez-vous vraiment supprimer cet étudiant ?",
       "danger",
-      () => {
-        saveData(students.filter(s => s.id !== id));
+      async () => {
+        try {
+          await fetch(`${API_URL}/students/${id}`, { method: "DELETE" });
+          setStudents(prev => prev.filter(s => s.id !== id));
+        } catch (err) {
+          console.error(err);
+        }
       }
     );
   };
@@ -595,18 +622,32 @@ function App() {
   const deleteHistoryCard = (studentId, historyIndex) => {
     requestConfirm(
       "Supprimer l'historique",
-      "Voulez-vous vraiment supprimer la sauvegarde de cette semaine ? Cette action est irréversible.",
+      "Voulez-vous vraiment supprimer la sauvegarde ?",
       "danger",
-      () => {
+      async () => {
         const student = students.find(s => s.id === studentId);
+        if (!student) return;
         const newHistory = [...student.history];
         newHistory.splice(historyIndex, 1);
 
-        const newStudents = students.map(s => s.id === studentId ? { ...s, history: newHistory } : s);
-        saveData(newStudents);
+        const updated = await syncStudent({ ...student, history: newHistory });
+        setHistoryModal(prev => ({ ...prev, student: updated }));
+      }
+    );
+  };
 
-        // Update the modal's current student view so it vanishes instantly
-        setHistoryModal(prev => ({ ...prev, student: { ...student, history: newHistory } }));
+  const deleteAllStudents = () => {
+    requestConfirm(
+      "⚠️ حذف جميع التلاميذ",
+      `هل أنت متأكد من حذف جميع التلاميذ (${students.length})؟ هذا الإجراء لا يمكن التراجع عنه!`,
+      "danger",
+      async () => {
+        try {
+          await Promise.all(students.map(s => fetch(`${API_URL}/students/${s.id}`, { method: "DELETE" })));
+          setStudents([]);
+        } catch (err) {
+          console.error("Delete All Error:", err);
+        }
       }
     );
   };
@@ -626,7 +667,7 @@ function App() {
     const partial = Number(s.partial_amount || 0);
     const unpaidCyclesCount = Math.ceil((s.unpaid_count || 0) / maxS);
     const unpaidSum = (unpaidCyclesCount * (s.price || 0)) - partial;
-    
+
     acc.totalExpected += paidSum + partial + unpaidSum;
     acc.collected += paidSum + partial;
     acc.pendingAmount += unpaidSum;
@@ -731,6 +772,14 @@ function App() {
               <Search size={22} style={{ position: 'absolute', left: 20, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input type="text" placeholder="Rechercher par nom..." className="search-input" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
+            <button
+              className="btn-primary-modern"
+              onClick={deleteAllStudents}
+              style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 4px 20px rgba(239,68,68,0.4)' }}
+              title="حذف جميع التلاميذ"
+            >
+              <Trash2 size={22} /> حذف الكل
+            </button>
             <button className="btn-primary-modern" onClick={() => setShowModal(true)}>
               <Plus size={24} /> Ajouter Étudiant
             </button>
@@ -806,13 +855,13 @@ function App() {
                       <td style={{ textAlign: 'center', color: '#64748b' }}>{d.year}</td>
                       <td style={{ textAlign: 'center', fontWeight: 900, fontSize: '1.2rem', color: d.total > 0 ? '#10b981' : '#94a3b8' }}>{d.total} DT</td>
                       <td style={{ textAlign: 'center' }}>
-                         {d.total > 0 ? (
-                           <span style={{ background: d.isCurrent ? '#eff6ff' : '#ecfdf5', color: d.isCurrent ? '#2563eb' : '#059669', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 800 }}>
-                             {d.isCurrent ? 'EN COURS' : 'CLÔTURÉ'}
-                           </span>
-                         ) : (
-                           <span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 800 }}>VIDE</span>
-                         )}
+                        {d.total > 0 ? (
+                          <span style={{ background: d.isCurrent ? '#eff6ff' : '#ecfdf5', color: d.isCurrent ? '#2563eb' : '#059669', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 800 }}>
+                            {d.isCurrent ? 'EN COURS' : 'CLÔTURÉ'}
+                          </span>
+                        ) : (
+                          <span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 800 }}>VIDE</span>
+                        )}
                       </td>
                     </tr>
                   ));
