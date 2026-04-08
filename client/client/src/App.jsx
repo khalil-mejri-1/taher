@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { 
-  Users, 
-  CheckCircle2, 
-  XCircle, 
-  Calendar, 
-  DollarSign, 
-  Search, 
-  Plus, 
+import {
+  Users,
+  CheckCircle2,
+  XCircle,
+  Calendar,
+  DollarSign,
+  Search,
+  Plus,
   MoreVertical,
   LayoutDashboard,
   Settings,
@@ -67,7 +67,7 @@ function App() {
     }
   };
 
-  const filteredStudents = students.filter(s => 
+  const filteredStudents = students.filter(s =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -80,9 +80,9 @@ function App() {
         [day]: student.attendance[day] === 1 ? 0 : 1
       }
     };
-    
+
     setStudents(prev => prev.map(s => s.id === studentId ? updated : s));
-    
+
     try {
       await axios.put(`${API_URL}/${studentId}`, updated);
     } catch (err) {
@@ -163,7 +163,7 @@ function App() {
             {error && <p style={{ color: 'var(--danger)', fontSize: '0.8rem', marginBottom: '1rem', fontWeight: 600 }}>{error}</p>}
             <button type="submit" className="login-btn">Accéder au Dashboard</button>
           </form>
-          <p style={{ marginTop: '2rem', color: '#4b5563', fontSize: '0.75rem' }}>© 2024 Atelier Sfax - Gestion Éducative</p>
+          <p style={{ marginTop: '2rem', color: '#4b5563', fontSize: '0.75rem' }}>© 2026 Atelier Sfax - Gestion Éducative</p>
         </motion.div>
       </div>
     );
@@ -293,12 +293,12 @@ function App() {
                 <motion.tr layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={student.id}>
                   <td style={{ paddingLeft: '2.5rem', color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>{idx + 1}</td>
                   <td style={{ fontWeight: 700, color: '#1f2937' }}>{student.name}</td>
-                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.tue_m ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'tue_m')}>{student.attendance.tue_m ? <CheckCircle2 size={14} /> : ''}</div></td>
-                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.tue_a ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'tue_a')}>{student.attendance.tue_a ? <CheckCircle2 size={14} /> : ''}</div></td>
-                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.wed_m ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'wed_m')}>{student.attendance.wed_m ? <CheckCircle2 size={14} /> : ''}</div></td>
-                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.wed_a ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'wed_a')}>{student.attendance.wed_a ? <CheckCircle2 size={14} /> : ''}</div></td>
-                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.sat_m ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'sat_m')}>{student.attendance.sat_m ? <CheckCircle2 size={14} /> : ''}</div></td>
-                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.sat_a ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'sat_a')}>{student.attendance.sat_a ? <CheckCircle2 size={14} /> : ''}</div></td>
+                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.tue_m ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'tue_m')}>{student.attendance.tue_m ? <CheckCircle2 size={14} /> : null}</div></td>
+                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.tue_a ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'tue_a')}>{student.attendance.tue_a ? <CheckCircle2 size={14} /> : null}</div></td>
+                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.wed_m ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'wed_m')}>{student.attendance.wed_m ? <CheckCircle2 size={14} /> : null}</div></td>
+                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.wed_a ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'wed_a')}>{student.attendance.wed_a ? <CheckCircle2 size={14} /> : null}</div></td>
+                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.sat_m ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'sat_m')}>{student.attendance.sat_m ? <CheckCircle2 size={14} /> : null}</div></td>
+                  <td className="checkbox-cell"><div className={`custom-checkbox ${student.attendance.sat_a ? 'checked' : ''}`} onClick={() => toggleAttendance(student.id, 'sat_a')}>{student.attendance.sat_a ? <CheckCircle2 size={14} /> : null}</div></td>
                   <td><select value={student.payment} onChange={(e) => updatePayment(student.id, e.target.value)} style={{ padding: '0.45rem 0.75rem', borderRadius: '8px', border: 'none', background: student.payment === 'OK' ? '#dcfce7' : student.payment === 'NN' ? '#fee2e2' : student.payment === 'RESTE' ? '#fef9c3' : '#f3f4f6', color: student.payment === 'OK' ? '#166534' : student.payment === 'NN' ? '#991b1b' : student.payment === 'RESTE' ? '#854d0e' : '#6b7280', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer' }}><option value="">ATTENTE</option><option value="OK">OK</option><option value="NN">NN</option><option value="RESTE">RESTE</option></select></td>
                   <td><input type="text" placeholder="..." defaultValue={student.note} onBlur={(e) => updateNote(student.id, e.target.value)} style={{ border: 'none', fontSize: '0.85rem', background: 'transparent', width: '100%', color: '#64748b', fontWeight: 500 }} /></td>
                   <td><button onClick={() => deleteStudent(student.id)} style={{ color: '#ef4444', opacity: 0.7, padding: 4 }} title="Supprimer"><Trash2 size={16} /></button></td>

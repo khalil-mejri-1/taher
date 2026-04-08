@@ -1,67 +1,110 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+const mongoose = require('mongoose');
 
 const app = express();
-const DATA_FILE = path.join(__dirname, 'data.json');
 
 app.use(cors());
 app.use(express.json());
 
-// Load data from file or seed initial data
-const loadData = () => {
-    if (!fs.existsSync(DATA_FILE)) {
-        const initialData = [
-            { id: 1, name: 'ABIR BEN MAHMOD', attendance: { tue_m: 1, tue_a: 1, wed_m: 1, wed_a: 1, sat_m: 0, sat_a: 0 }, payment: 'OK', note: '' },
-            { id: 2, name: 'SIHEM SALAH', attendance: { tue_m: 0, tue_a: 0, wed_m: 0, wed_a: 0, sat_m: 1, sat_a: 1 }, payment: '', note: '' },
-            { id: 3, name: 'AMENI TWETI', attendance: { tue_m: 0, tue_a: 0, wed_m: 0, wed_a: 0, sat_m: 1, sat_a: 1 }, payment: 'OK', note: '' },
-            { id: 4, name: 'CHAYMA AYDI', attendance: { tue_m: 0, tue_a: 0, wed_m: 1, wed_a: 1, sat_m: 1, sat_a: 1 }, payment: 'NN', note: '' },
-            { id: 5, name: 'DALEL BOULILA', attendance: { tue_m: 0, tue_a: 0, wed_m: 0, wed_a: 0, sat_m: 1, sat_a: 1 }, payment: 'OK', note: '' }
-        ];
-        fs.writeFileSync(DATA_FILE, JSON.stringify(initialData, null, 2));
-        return initialData;
-    }
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-};
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('✅ Connected to MongoDB Atlas'))
+  .catch(err => console.error('❌ MongoDB Connection Error:', err));
 
-const saveData = (data) => {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-};
+// Student Schema
+const studentSchema = new mongoose.Schema({
+  name: String,
+  price: { type: Number, default: 0 },
+  phone: String,
+  registrationDate: String,
+  idCard: String,
+  isPending: { type: Boolean, default: false },
+  attendance: {
+    tue_m: { type: Number, default: 0 },
+    wed_m: { type: Number, default: 0 },
+    wed_a: { type: Number, default: 0 },
+    sat_m: { type: Number, default: 0 },
+    sat_a: { type: Number, default: 0 },
+    sun_m: { type: Number, default: 0 }
+  },
+  schedule: {
+    tue_m: { type: Boolean, default: true },
+    wed_m: { type: Boolean, default: true },
+    wed_a: { type: Boolean, default: true },
+    sat_m: { type: Boolean, default: true },
+    sat_a: { type: Boolean, default: true },
+    sun_m: { type: Boolean, default: true }
+  },
+  payment: { type: String, default: 'PENDING' },
+  partial_amount: { type: Number, default: 0 },
+  note: { type: String, default: '' },
+  archived: { type: Boolean, default: false },
+  sessions_count: { type: Number, default: 0 },
+  unpaid_count: { type: Number, default: 0 },
+  paid_cycles: { type: [Number], default: [] },
+  history: { type: [mongoose.Schema.Types.Mixed], default: [] }
+}, { 
+  timestamps: true,
+  toJSON: {
+    virtuals: true,
+    transform: (doc, ret) => {
+      ret.id = ret._id;
+      delete ret._id;
+      delete ret.__v;
+      return ret;
+    }
+  }
+});
+
+const Student = mongoose.model('Student', studentSchema);
 
 // Routes
-app.get('/api/students', (req, res) => {
-    res.json(loadData());
+app.get('/api/students', async (req, res) => {
+  try {
+    const students = await Student.find().sort({ createdAt: -1 });
+    res.json(students);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post('/api/students', (req, res) => {
-    const students = loadData();
-    const newStudent = { id: Date.now(), ...req.body };
-    students.push(newStudent);
-    saveData(students);
+app.post('/api/students', async (req, res) => {
+  try {
+    const newStudent = new Student(req.body);
+    await newStudent.save();
     res.status(201).json(newStudent);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
-app.put('/api/students/:id', (req, res) => {
-    const students = loadData();
-    const idx = students.findIndex(s => s.id == req.params.id);
-    if (idx !== -1) {
-        students[idx] = { ...students[idx], ...req.body };
-        saveData(students);
-        res.json(students[idx]);
-    } else {
-        res.status(404).json({ error: 'Not found' });
-    }
+app.put('/api/students/:id', async (req, res) => {
+  try {
+    const updatedStudent = await Student.findByIdAndUpdate(
+      req.params.id, 
+      req.body, 
+      { new: true, runValidators: true }
+    );
+    if (!updatedStudent) return res.status(404).json({ error: 'Student not found' });
+    res.json(updatedStudent);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
-app.delete('/api/students/:id', (req, res) => {
-    let students = loadData();
-    students = students.filter(s => s.id != req.params.id);
-    saveData(students);
+app.delete('/api/students/:id', async (req, res) => {
+  try {
+    const deletedStudent = await Student.findByIdAndDelete(req.params.id);
+    if (!deletedStudent) return res.status(404).json({ error: 'Student not found' });
     res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

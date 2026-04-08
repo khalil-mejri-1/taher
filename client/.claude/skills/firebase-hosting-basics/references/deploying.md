@@ -37,3 +37,6 @@ Clone the `feature-beta` channel on your default site to live:
 ```bash
 npx -y firebase-tools@latest hosting:clone my-project:feature-beta my-project:live
 ```
+
+
+mongodb+srv://2cpatron_db_user:jBLtbsqZmkaxOmuy@cluster0.2ottrnd.mongodb.net/
