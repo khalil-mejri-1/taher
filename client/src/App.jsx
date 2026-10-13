@@ -23,13 +23,15 @@ import {
   Info,
   Pencil,
   Printer,
-  Check
+  Check,
+  FileJson
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './index.css';
 
 
-const API_URL = "https://taher-three.vercel.app/api";
+// const API_URL = "https://taher-three.vercel.app/api";
+const API_URL = "http://localhost:3000/api";
 
 function App() {
   const [students, setStudents] = useState([]);
@@ -79,7 +81,110 @@ function App() {
     return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
   };
 
-  const defaultSchedule = { tue_m: true, wed_m: true, wed_a: true, sat_m: true, sat_a: true, sun_m: true };
+  const defaultSchedule = {
+    tue_m: true,
+    tue_a: true,
+    wed_m: true,
+    wed_a: true,
+    thu_m: true,
+    thu_a: true,
+    fri_m: true,
+    fri_a: true,
+    sat_m: true,
+    sat_a: true,
+    sun_m: true
+  };
+
+  const defaultAttendance = {
+    tue_m: 0,
+    tue_a: 0,
+    wed_m: 0,
+    wed_a: 0,
+    thu_m: 0,
+    thu_a: 0,
+    fri_m: 0,
+    fri_a: 0,
+    sat_m: 0,
+    sat_a: 0,
+    sun_m: 0
+  };
+
+  const sessionOffsets = {
+    tue_m: 0,
+    tue_a: 0,
+    wed_m: 1,
+    wed_a: 1,
+    thu_m: 2,
+    thu_a: 2,
+    fri_m: 3,
+    fri_a: 3,
+    sat_m: 4,
+    sat_a: 4,
+    sun_m: 5
+  };
+
+  const DAYS_CONFIG = [
+    {
+      day: 'Mardi',
+      offset: 0,
+      bg: '#fff7ed',
+      sessions: [
+        { id: 'tue_m', label: 'Matin', name: 'Mardi Matin' },
+        { id: 'tue_a', label: 'A.Midi', name: 'Mardi A.Midi' }
+      ]
+    },
+    {
+      day: 'Mercredi',
+      offset: 1,
+      bg: '#f0fdf4',
+      sessions: [
+        { id: 'wed_m', label: 'Matin', name: 'Mercredi Matin' },
+        { id: 'wed_a', label: 'A.Midi', name: 'Mercredi A.Midi' }
+      ]
+    },
+    {
+      day: 'Jeudi',
+      offset: 2,
+      bg: '#fefce8',
+      sessions: [
+        { id: 'thu_m', label: 'Matin', name: 'Jeudi Matin' },
+        { id: 'thu_a', label: 'A.Midi', name: 'Jeudi A.Midi' }
+      ]
+    },
+    {
+      day: 'Vendredi',
+      offset: 3,
+      bg: '#f0fdfa',
+      sessions: [
+        { id: 'fri_m', label: 'Matin', name: 'Vendredi Matin' },
+        { id: 'fri_a', label: 'A.Midi', name: 'Vendredi A.Midi' }
+      ]
+    },
+    {
+      day: 'Samedi',
+      offset: 4,
+      bg: '#eff6ff',
+      sessions: [
+        { id: 'sat_m', label: 'Matin', name: 'Samedi Matin' },
+        { id: 'sat_a', label: 'A.Midi', name: 'Samedi A.Midi' }
+      ]
+    },
+    {
+      day: 'Dimanche',
+      offset: 5,
+      bg: '#faf5ff',
+      sessions: [
+        { id: 'sun_m', label: 'seule séance', name: 'Dimanche (séance unique)', headerLabel: 'unique', terminateLabel: 'Term' }
+      ]
+    }
+  ];
+
+  const SESSIONS_CONFIG = DAYS_CONFIG.flatMap(d => d.sessions);
+
+  const isSessionScheduled = (student, sessionId) => {
+    if (!student || !student.schedule) return true;
+    return Boolean(student.schedule[sessionId]);
+  };
   const [newStudentSchedule, setNewStudentSchedule] = useState(defaultSchedule);
 
   const [editModal, setEditModal] = useState(false);
@@ -208,11 +313,13 @@ function App() {
 
   const toggleAttendance = async (studentId, day) => {
     const student = students.find(s => s.id === studentId);
-    const isNowPresent = student.attendance[day] === 0;
+    if (!student) return;
+    const isNowPresent = (student.attendance?.[day] || 0) === 0;
     const updated = {
       ...student,
       attendance: {
-        ...student.attendance,
+        ...defaultAttendance,
+        ...(student.attendance || {}),
         [day]: isNowPresent ? 1 : 0
       }
     };
@@ -221,13 +328,15 @@ function App() {
 
   const setAttendanceStatus = async (studentId, day, isPresent) => {
     const student = students.find(s => s.id === studentId);
-    const currentlyPresent = student.attendance[day] === 1;
+    if (!student) return;
+    const currentlyPresent = (student.attendance?.[day] || 0) === 1;
     if (currentlyPresent === isPresent) return;
 
     const updated = {
       ...student,
       attendance: {
-        ...student.attendance,
+        ...defaultAttendance,
+        ...(student.attendance || {}),
         [day]: isPresent ? 1 : 0
       }
     };
@@ -236,7 +345,9 @@ function App() {
 
   const openSessionModal = (sessionId, sessionName) => {
     setSessionModal({ show: true, sessionId, sessionName });
-  }; const terminateSession = (sessionId, sessionName) => {
+  };
+
+  const terminateSession = (sessionId, sessionName) => {
     if (terminatedSessions[sessionId]) return;
     requestConfirm(
       "Clôturer la séance",
@@ -245,10 +356,9 @@ function App() {
       async () => {
         const batchUpdates = [];
         students.forEach(s => {
-          if (s.schedule && s.schedule[sessionId] !== false && !s.archived) {
+          if (isSessionScheduled(s, sessionId) && !s.archived) {
             const isPresent = s.attendance && s.attendance[sessionId] === 1;
-            const offsets = { tue_m: 0, wed_m: 1, wed_a: 1, sat_m: 4, sat_a: 4, sun_m: 5 };
-            const sessionDate = getDayDate(weekStartDate, offsets[sessionId] || 0);
+            const sessionDate = getDayDate(weekStartDate, sessionOffsets[sessionId] || 0);
 
             const newLog = {
               date: sessionDate,
@@ -279,7 +389,7 @@ function App() {
               sessions_count: nextCount,
               payment: nextPayment,
               unpaid_count: recalUnpaid,
-              attendance: { ...s.attendance, [sessionId]: 0 }
+              attendance: { ...defaultAttendance, ...(s.attendance || {}), [sessionId]: 0 }
             });
           }
         });
@@ -324,7 +434,7 @@ function App() {
   };
 
   const handlePrintSession = () => {
-    const studentsToPrint = activeStudentsList.filter(s => s.schedule && s.schedule[sessionModal.sessionId] !== false);
+    const studentsToPrint = activeStudentsList.filter(s => isSessionScheduled(s, sessionModal.sessionId));
     const printWindow = window.open('', '_blank');
 
     const html = `
@@ -381,7 +491,7 @@ function App() {
                   </td>
                   <td class="attendance-cell"><div class="check-box"></div></td>
                   <td class="attendance-cell"><div class="check-box"></div></td>
-                  <td>${s.payment !== 'OK' && (s.unpaid_count || 0) >= 1 ? `<span style="color: #ef4444; font-weight: bold;">انتباه: ${s.unpaid_count} حصص بدون خلاص</span>` : ''}</td>
+                  <td>${s.payment !== 'OK' && Math.max(s.unpaid_count || 0, s.sessions_count || 0) > 0 ? `<span style="color: #ef4444; font-weight: bold;">انتباه: ${Math.max(s.unpaid_count || 0, s.sessions_count || 0)} حصص بدون خلاص</span>` : ''}</td>
                 </tr>
               `}).join('')}
             </tbody>
@@ -418,7 +528,7 @@ function App() {
         const batchUpdates = students.map(s => ({
           id: s.id,
           history: [...(s.history || []), { date: currentDate, attendance: { ...(s.attendance || {}) } }],
-          attendance: { tue_m: 0, wed_m: 0, wed_a: 0, sat_m: 0, sat_a: 0, sun_m: 0 }
+          attendance: { ...defaultAttendance }
         }));
 
         await syncBatch(batchUpdates);
@@ -510,7 +620,7 @@ function App() {
       registrationDate: newStudentDate,
       idCard: newStudentIDImage,
       isPending: isPendingRecord,
-      attendance: { tue_m: 0, wed_m: 0, wed_a: 0, sat_m: 0, sat_a: 0, sun_m: 0 },
+      attendance: { ...defaultAttendance },
       schedule: newStudentSchedule,
       payment: newStudentPayment,
       note: '',
@@ -553,7 +663,12 @@ function App() {
     setEditStudentPhone(s.phone || '');
     setEditStudentIDImage(s.idCard || '');
     setEditStudentDate(s.registrationDate || '');
-    setEditStudentSchedule(s.schedule || defaultSchedule);
+    const currentSched = s.schedule || {};
+    const filledSched = {};
+    SESSIONS_CONFIG.forEach(sess => {
+      filledSched[sess.id] = currentSched[sess.id] !== undefined ? Boolean(currentSched[sess.id]) : false;
+    });
+    setEditStudentSchedule(s.schedule ? filledSched : defaultSchedule);
     setEditStudentPayment(s.payment || 'PENDING');
     setEditStudentPartial(s.partial_amount || 0);
     setEditModal(true);
@@ -652,11 +767,36 @@ function App() {
     );
   };
 
+  const resetAllSessions = () => {
+    requestConfirm(
+      "🔄 تصفير العداد لجميع التلاميذ",
+      `هل أنت متأكد من تصفير عدد الحصص والديون (Séances sans paiement) لجميع التلاميذ للبدء من الصفر؟`,
+      "danger",
+      async () => {
+        try {
+          const batchUpdates = students.map(s => ({
+            id: s.id,
+            sessions_count: 0,
+            unpaid_count: 0,
+            partial_amount: 0,
+            payment: 'PENDING',
+            paid_cycles: [],
+            session_log: [],
+            attendance: { ...defaultAttendance }
+          }));
+          await syncBatch(batchUpdates);
+        } catch (err) {
+          console.error("Reset All Error:", err);
+        }
+      }
+    );
+  };
+
   const activeStudentsList = students.filter(s => !s.archived);
 
   const stats = {
     total: activeStudentsList.length,
-    presentToday: activeStudentsList.filter(s => Object.values(s.attendance).some(v => v === 1)).length,
+    presentToday: activeStudentsList.filter(s => Object.values(s.attendance || {}).some(v => v === 1)).length,
     pendingPayment: activeStudentsList.filter(s => s.payment === 'NN' || s.payment === 'RESTE' || (s.sessions_count || 0) === getMaxSessions(s.schedule)).length,
     revenue: activeStudentsList.filter(s => s.payment === 'OK').reduce((sum, s) => sum + (s.price || 0), 0)
   };
@@ -738,6 +878,7 @@ function App() {
           <button className={`nav-item ${activeTab === 'archives' ? 'active' : ''}`} onClick={() => setActiveTab('archives')}><Archive size={22} /> Archives</button>
           <button className={`nav-item ${activeTab === 'pending' ? 'active' : ''}`} onClick={() => setActiveTab('pending')}><Clock size={22} /> En attente</button>
           <button className={`nav-item ${activeTab === 'finances' ? 'active' : ''}`} onClick={() => setActiveTab('finances')}><DollarSign size={22} /> Finances & Rapports</button>
+          <button className={`nav-item ${activeTab === 'json_page' ? 'active' : ''}`} onClick={() => setActiveTab('json_page')}><FileJson size={22} /> JSON Page</button>
           <button className="nav-item" onClick={handleLogout} style={{ marginTop: 'auto', background: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5' }}><LogOut size={22} /> Quitter la session</button>
         </nav>
 
@@ -761,10 +902,10 @@ function App() {
         <header style={{ marginBottom: '4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <div>
             <h1 style={{ fontSize: '3.2rem', color: 'var(--primary)', lineHeight: 1.1 }}>
-              {activeTab === 'archives' ? 'Archives' : activeTab === 'pending' ? 'En attente' : activeTab === 'finances' ? 'Finances & Rapports' : "Vue d'ensemble"}
+              {activeTab === 'archives' ? 'Archives' : activeTab === 'pending' ? 'En attente' : activeTab === 'finances' ? 'Finances & Rapports' : activeTab === 'json_page' ? 'JSON Page' : "Vue d'ensemble"}
             </h1>
             <p style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '1.3rem', marginTop: '0.5rem' }}>
-              {activeTab === 'archives' ? 'Étudiants archivés. Vous pouvez les restaurer à tout moment.' : activeTab === 'pending' ? 'Liste des étudiants en attente de démarrage.' : activeTab === 'finances' ? 'Suivi du chiffre d\'affaires, paiements et recouvrements.' : 'Suivez la progression et les règlements en temps réel.'}
+              {activeTab === 'archives' ? 'Étudiants archivés. Vous pouvez les restaurer à tout moment.' : activeTab === 'pending' ? 'Liste des étudiants en attente de démarrage.' : activeTab === 'finances' ? 'Suivi du chiffre d\'affaires, paiements et recouvrements.' : activeTab === 'json_page' ? 'Exporter les données des élèves au format JSON.' : 'Suivez la progression et les règlements en temps réel.'}
             </p>
           </div>
           <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '10px' }}>
@@ -772,6 +913,14 @@ function App() {
               <Search size={22} style={{ position: 'absolute', left: 20, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input type="text" placeholder="Rechercher par nom..." className="search-input" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
+            <button
+              className="btn-primary-modern"
+              onClick={resetAllSessions}
+              style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', boxShadow: '0 4px 20px rgba(245,158,11,0.4)', color: 'white' }}
+              title="تصفير جميع الحصص للدفعات"
+            >
+              <RefreshCcw size={22} /> تصفير الحصص
+            </button>
             <button
               className="btn-primary-modern"
               onClick={deleteAllStudents}
@@ -871,7 +1020,84 @@ function App() {
           </div>
         )}
 
-        {activeTab !== 'finances' && (
+        {activeTab === 'json_page' && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="table-container" style={{ padding: '2.5rem' }}>
+            <div className="table-header-box" style={{ background: 'linear-gradient(to right, #ecfdf5, #fff)', marginBottom: '2rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <div style={{ width: 15, height: 15, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 15px #10b981' }}></div>
+                <div>
+                  <h3 style={{ fontSize: '1.6rem', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                    Exportation des Données (JSON)
+                  </h3>
+                  <p style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600, marginTop: '4px' }}>JSON Page / صفحة البيانات</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button 
+                  onClick={() => {
+                    const dataToExport = students.map(s => ({
+                      "الاسم": s.name,
+                      "رقم الهاتف": s.phone,
+                      "أيام الدراسة": Object.keys(s.schedule || {}).filter(day => s.schedule[day]).join(' - '),
+                      "الثمن (Tarif DT)": s.price
+                    }));
+                    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `data_eleves_${new Date().toISOString().split('T')[0]}.json`;
+                    link.click();
+                  }}
+                  className="btn-primary-modern" 
+                  style={{ background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)' }}
+                >
+                  <FileJson size={20} /> تحميل ملف JSON
+                </button>
+              </div>
+            </div>
+
+            <div style={{ 
+              position: 'relative', 
+              background: '#0f172a', 
+              borderRadius: '20px', 
+              padding: '2rem',
+              boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5), 0 10px 30px rgba(0,0,0,0.1)',
+              border: '1px solid rgba(255,255,255,0.05)'
+            }}>
+              <div style={{ 
+                position: 'absolute', 
+                top: '1rem', 
+                right: '2rem', 
+                display: 'flex', 
+                gap: '8px' 
+              }}>
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f56' }}></div>
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#ffbd2e' }}></div>
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#27c93f' }}></div>
+              </div>
+              
+              <pre style={{ 
+                margin: 0,
+                color: '#38bdf8', 
+                fontFamily: '"Fira Code", "JetBrains Mono", monospace',
+                fontSize: '0.95rem',
+                lineHeight: '1.6',
+                overflow: 'auto',
+                maxHeight: '600px',
+                paddingTop: '1rem'
+              }}>
+                {JSON.stringify(students.map(s => ({
+                  "الاسم": s.name,
+                  "رقم الهاتف": s.phone,
+                  "أيام الدراسة": Object.keys(s.schedule || {}).filter(day => s.schedule[day]).join(' - '),
+                  "الثمن (Tarif DT)": s.price
+                })), null, 4)}
+              </pre>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab !== 'finances' && activeTab !== 'json_page' && (
           <div className="table-container">
             <div className="table-header-box">
               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -904,30 +1130,14 @@ function App() {
               <thead>
                 <tr>
                   <th style={{ paddingLeft: '2.5rem' }}>Informations Étudiant</th>
-                  <th colSpan="1" style={{ textAlign: 'center', background: '#fff7ed' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{getDayDate(weekStartDate, 0)}</span>
-                      <span>Mardi</span>
-                    </div>
-                  </th>
-                  <th colSpan="2" style={{ textAlign: 'center', background: '#f0fdf4' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{getDayDate(weekStartDate, 1)}</span>
-                      <span>Mercredi</span>
-                    </div>
-                  </th>
-                  <th colSpan="2" style={{ textAlign: 'center', background: '#eff6ff' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{getDayDate(weekStartDate, 4)}</span>
-                      <span>Samedi</span>
-                    </div>
-                  </th>
-                  <th colSpan="1" style={{ textAlign: 'center', background: '#faf5ff' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{getDayDate(weekStartDate, 5)}</span>
-                      <span>Dimanche</span>
-                    </div>
-                  </th>
+                  {DAYS_CONFIG.map(d => (
+                    <th key={d.day} colSpan={d.sessions.length} style={{ textAlign: 'center', background: d.bg }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{getDayDate(weekStartDate, d.offset)}</span>
+                        <span>{d.day}</span>
+                      </div>
+                    </th>
+                  ))}
                   <th style={{ textAlign: 'center', background: '#f8fafc', width: '160px' }}>Cycle (8 Séances)</th>
                   <th>Règlement</th>
                   <th>Annotations</th>
@@ -935,42 +1145,40 @@ function App() {
                 </tr>
                 <tr style={{ background: '#f8fafc', fontSize: '9px' }}>
                   <th colSpan="1"></th>
-                  <th style={{ textAlign: 'center', borderRight: '1px solid #eef2f6', padding: '8px 4px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
-                      <div onClick={() => openSessionModal('tue_m', 'Mardi Matin')} className="session-header-btn" style={{ cursor: 'pointer', width: '100%' }} title="Liste d'appel pour cette séance">Matin</div>
-                      <button disabled={terminatedSessions['tue_m']} onClick={(e) => { e.stopPropagation(); terminateSession('tue_m', 'Mardi Matin'); }} style={{ background: terminatedSessions['tue_m'] ? '#cbd5e1' : '#10b981', color: terminatedSessions['tue_m'] ? '#64748b' : 'white', padding: '3px 8px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, border: 'none', cursor: terminatedSessions['tue_m'] ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}><CheckCircle2 size={10} /> {terminatedSessions['tue_m'] ? 'Terminée' : 'Terminer'}</button>
-                    </div>
-                  </th>
-                  <th style={{ textAlign: 'center', borderRight: '1px solid #eef2f6', padding: '8px 4px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
-                      <div onClick={() => openSessionModal('wed_m', 'Mercredi Matin')} className="session-header-btn" style={{ cursor: 'pointer', width: '100%' }} title="Liste d'appel pour cette séance">Matin</div>
-                      <button disabled={terminatedSessions['wed_m']} onClick={(e) => { e.stopPropagation(); terminateSession('wed_m', 'Mercredi Matin'); }} style={{ background: terminatedSessions['wed_m'] ? '#cbd5e1' : '#10b981', color: terminatedSessions['wed_m'] ? '#64748b' : 'white', padding: '3px 8px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, border: 'none', cursor: terminatedSessions['wed_m'] ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}><CheckCircle2 size={10} /> {terminatedSessions['wed_m'] ? 'Terminée' : 'Terminer'}</button>
-                    </div>
-                  </th>
-                  <th style={{ textAlign: 'center', borderRight: '1px solid #eef2f6', padding: '8px 4px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
-                      <div onClick={() => openSessionModal('wed_a', 'Mercredi A.Midi')} className="session-header-btn" style={{ cursor: 'pointer', width: '100%' }} title="Liste d'appel pour cette séance">A.Midi</div>
-                      <button disabled={terminatedSessions['wed_a']} onClick={(e) => { e.stopPropagation(); terminateSession('wed_a', 'Mercredi A.Midi'); }} style={{ background: terminatedSessions['wed_a'] ? '#cbd5e1' : '#10b981', color: terminatedSessions['wed_a'] ? '#64748b' : 'white', padding: '3px 8px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, border: 'none', cursor: terminatedSessions['wed_a'] ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}><CheckCircle2 size={10} /> {terminatedSessions['wed_a'] ? 'Terminée' : 'Terminer'}</button>
-                    </div>
-                  </th>
-                  <th style={{ textAlign: 'center', borderRight: '1px solid #eef2f6', padding: '8px 4px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
-                      <div onClick={() => openSessionModal('sat_m', 'Samedi Matin')} className="session-header-btn" style={{ cursor: 'pointer', width: '100%' }} title="Liste d'appel pour cette séance">Matin</div>
-                      <button disabled={terminatedSessions['sat_m']} onClick={(e) => { e.stopPropagation(); terminateSession('sat_m', 'Samedi Matin'); }} style={{ background: terminatedSessions['sat_m'] ? '#cbd5e1' : '#10b981', color: terminatedSessions['sat_m'] ? '#64748b' : 'white', padding: '3px 8px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, border: 'none', cursor: terminatedSessions['sat_m'] ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}><CheckCircle2 size={10} /> {terminatedSessions['sat_m'] ? 'Terminée' : 'Terminer'}</button>
-                    </div>
-                  </th>
-                  <th style={{ textAlign: 'center', borderRight: '1px solid #eef2f6', padding: '8px 4px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
-                      <div onClick={() => openSessionModal('sat_a', 'Samedi A.Midi')} className="session-header-btn" style={{ cursor: 'pointer', width: '100%' }} title="Liste d'appel pour cette séance">A.Midi</div>
-                      <button disabled={terminatedSessions['sat_a']} onClick={(e) => { e.stopPropagation(); terminateSession('sat_a', 'Samedi A.Midi'); }} style={{ background: terminatedSessions['sat_a'] ? '#cbd5e1' : '#10b981', color: terminatedSessions['sat_a'] ? '#64748b' : 'white', padding: '3px 8px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, border: 'none', cursor: terminatedSessions['sat_a'] ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}><CheckCircle2 size={10} /> {terminatedSessions['sat_a'] ? 'Terminée' : 'Terminer'}</button>
-                    </div>
-                  </th>
-                  <th style={{ textAlign: 'center', borderRight: '1px solid #eef2f6', padding: '8px 4px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
-                      <div onClick={() => openSessionModal('sun_m', 'Dimanche')} className="session-header-btn" style={{ cursor: 'pointer', width: '100%' }} title="Liste d'appel pour cette séance">unique</div>
-                      <button disabled={terminatedSessions['sun_m']} onClick={(e) => { e.stopPropagation(); terminateSession('sun_m', 'Dimanche (séance unique)'); }} style={{ background: terminatedSessions['sun_m'] ? '#cbd5e1' : '#10b981', color: terminatedSessions['sun_m'] ? '#64748b' : 'white', padding: '3px 8px', borderRadius: '6px', fontSize: '9px', fontWeight: 800, border: 'none', cursor: terminatedSessions['sun_m'] ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' }}><CheckCircle2 size={10} /> {terminatedSessions['sun_m'] ? 'Terminée' : 'Term'}</button>
-                    </div>
-                  </th>
+                  {SESSIONS_CONFIG.map(session => (
+                    <th key={session.id} style={{ textAlign: 'center', borderRight: '1px solid #eef2f6', padding: '8px 4px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center' }}>
+                        <div
+                          onClick={() => openSessionModal(session.id, session.name)}
+                          className="session-header-btn"
+                          style={{ cursor: 'pointer', width: '100%' }}
+                          title="Liste d'appel pour cette séance"
+                        >
+                          {session.headerLabel || session.label}
+                        </div>
+                        <button
+                          disabled={terminatedSessions[session.id]}
+                          onClick={(e) => { e.stopPropagation(); terminateSession(session.id, session.name); }}
+                          style={{
+                            background: terminatedSessions[session.id] ? '#cbd5e1' : '#10b981',
+                            color: terminatedSessions[session.id] ? '#64748b' : 'white',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontSize: '9px',
+                            fontWeight: 800,
+                            border: 'none',
+                            cursor: terminatedSessions[session.id] ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            textTransform: 'uppercase'
+                          }}
+                        >
+                          <CheckCircle2 size={10} /> {terminatedSessions[session.id] ? 'Terminée' : (session.terminateLabel || 'Terminer')}
+                        </button>
+                      </div>
+                    </th>
+                  ))}
                   <th></th>
                   <th colSpan="3"></th>
                 </tr>
@@ -988,13 +1196,12 @@ function App() {
                       style={{ background: (student.unpaid_count || 0) >= 1 ? '#fff1f2' : 'inherit' }}
                     >
                       <td style={{ paddingLeft: '2.5rem' }}>
-                        <div className="student-info">
+                        <div className="student-info" style={{ position: 'relative' }}>
                           {(student.sessions_count >= 2 && student.payment !== 'OK') && (
-                            <div style={{ position: 'absolute', top: -5, left: -5, background: '#ef4444', color: 'white', borderRadius: '50%', padding: '2px', border: '2px solid white', zIndex: 10 }} title="Attention: 2+ séances sans paiement">
+                            <div style={{ position: 'absolute', top: -5, left: -20, background: '#ef4444', color: 'white', borderRadius: '50%', padding: '2px', border: '2px solid white', zIndex: 10 }} title="Attention: 2+ séances sans paiement">
                               <AlertTriangle size={12} />
                             </div>
                           )}
-                          <div className="student-avatar">{student.name.charAt(0)}</div>
                           <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <span className="student-name" style={{ lineHeight: 1.2 }}>{student.name}</span>
                             <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#b45309', marginTop: '2px' }}>{student.price || 0} DT / {getMaxSessions(student.schedule)} Séances</span>
@@ -1002,19 +1209,20 @@ function App() {
                         </div>
                       </td>
 
-                      {['tue_m', 'wed_m', 'wed_a', 'sat_m', 'sat_a', 'sun_m'].map(session => {
-                        const isScheduled = student.schedule ? student.schedule[session] !== false : true;
+                      {SESSIONS_CONFIG.map(session => {
+                        const isScheduled = isSessionScheduled(student, session.id);
+                        const isAttended = student.attendance && student.attendance[session.id] === 1;
                         return (
-                          <td key={session} style={{ textAlign: 'center' }}>
+                          <td key={session.id} style={{ textAlign: 'center' }}>
                             <div
-                              className={`presence-toggle ${student.attendance[session] && isScheduled ? 'active' : ''}`}
+                              className={`presence-toggle ${isAttended && isScheduled ? 'active' : ''}`}
                               onClick={() => {
-                                if (isScheduled) toggleAttendance(student.id, session);
+                                if (isScheduled) toggleAttendance(student.id, session.id);
                               }}
                               style={!isScheduled ? { background: '#fef2f2', cursor: 'not-allowed', color: '#ef4444' } : {}}
                               title={isScheduled ? "Marquer présent/absent" : "Non programmé"}
                             >
-                              {isScheduled ? (student.attendance[session] ? <CircleCheckBig size={14} /> : null) : <X size={14} strokeWidth={3} />}
+                              {isScheduled ? (isAttended ? <CircleCheckBig size={14} /> : null) : <X size={14} strokeWidth={3} />}
                             </div>
                           </td>
                         );
@@ -1062,9 +1270,9 @@ function App() {
                       <td>
                         {((student.sessions_count || 0) === getMaxSessions(student.schedule) || student.payment !== 'OK') ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                            {student.payment !== 'OK' && (student.unpaid_count || 0) >= 1 && (student.sessions_count || 0) < getMaxSessions(student.schedule) && (
+                            {student.payment !== 'OK' && (student.unpaid_count > 0 || student.sessions_count > 0) && (
                               <span style={{ fontSize: '10px', color: '#ef4444', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                <AlertTriangle size={10} /> {student.unpaid_count} séances sans paiement !
+                                <AlertTriangle size={10} /> {Math.max(student.unpaid_count || 0, student.sessions_count || 0)} séances sans paiement !
                               </span>
                             )}
                             <select
@@ -1217,13 +1425,8 @@ function App() {
 
                 <div style={{ marginBottom: '2.5rem' }}>
                   <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 800, marginBottom: '1rem', color: 'var(--primary)', textTransform: 'uppercase' }}>Jours de présence prévus (Planning)</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-                    {[
-                      { day: 'Mardi', sessions: [{ id: 'tue_m', label: 'Matin' }] },
-                      { day: 'Mercredi', sessions: [{ id: 'wed_m', label: 'Matin' }, { id: 'wed_a', label: 'A.Midi' }] },
-                      { day: 'Samedi', sessions: [{ id: 'sat_m', label: 'Matin' }, { id: 'sat_a', label: 'A.Midi' }] },
-                      { day: 'Dimanche', sessions: [{ id: 'sun_m', label: 'seule séance' }] }
-                    ].map(d => (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                    {DAYS_CONFIG.map(d => (
                       <div key={d.day} style={{ background: '#f8fafc', padding: '15px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                         <p style={{ fontSize: '0.85rem', fontWeight: 800, marginBottom: '12px', color: '#64748b', textTransform: 'uppercase' }}>{d.day}</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -1231,7 +1434,7 @@ function App() {
                             <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600, color: newStudentSchedule[s.id] ? 'var(--primary)' : '#94a3b8' }}>
                               <input
                                 type="checkbox"
-                                checked={newStudentSchedule[s.id]}
+                                checked={!!newStudentSchedule[s.id]}
                                 onChange={(e) => setNewStudentSchedule({ ...newStudentSchedule, [s.id]: e.target.checked })}
                                 style={{ width: '20px', height: '20px', accentColor: 'var(--accent)', cursor: 'pointer' }}
                               />
@@ -1317,13 +1520,8 @@ function App() {
 
                 <div style={{ marginBottom: '2.5rem' }}>
                   <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 800, marginBottom: '1rem', color: 'var(--primary)', textTransform: 'uppercase' }}>Jours de présence prévus (Planning)</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-                    {[
-                      { day: 'Mardi', sessions: [{ id: 'tue_m', label: 'Matin' }] },
-                      { day: 'Mercredi', sessions: [{ id: 'wed_m', label: 'Matin' }, { id: 'wed_a', label: 'A.Midi' }] },
-                      { day: 'Samedi', sessions: [{ id: 'sat_m', label: 'Matin' }, { id: 'sat_a', label: 'A.Midi' }] },
-                      { day: 'Dimanche', sessions: [{ id: 'sun_m', label: 'seule séance' }] }
-                    ].map(d => (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                    {DAYS_CONFIG.map(d => (
                       <div key={d.day} style={{ background: '#f8fafc', padding: '15px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                         <p style={{ fontSize: '0.85rem', fontWeight: 800, marginBottom: '12px', color: '#64748b', textTransform: 'uppercase' }}>{d.day}</p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -1331,7 +1529,7 @@ function App() {
                             <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600, color: editStudentSchedule[s.id] ? 'var(--primary)' : '#94a3b8' }}>
                               <input
                                 type="checkbox"
-                                checked={editStudentSchedule[s.id]}
+                                checked={!!editStudentSchedule[s.id]}
                                 onChange={(e) => setEditStudentSchedule({ ...editStudentSchedule, [s.id]: e.target.checked })}
                                 style={{ width: '20px', height: '20px', accentColor: 'var(--accent)', cursor: 'pointer' }}
                               />
@@ -1393,9 +1591,9 @@ function App() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {activeStudentsList
-                  .filter(s => s.schedule && s.schedule[sessionModal.sessionId] !== false)
+                  .filter(s => isSessionScheduled(s, sessionModal.sessionId))
                   .map(student => {
-                    const isPresent = student.attendance[sessionModal.sessionId] === 1;
+                    const isPresent = student.attendance && student.attendance[sessionModal.sessionId] === 1;
                     return (
                       <div key={student.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1475,7 +1673,7 @@ function App() {
                             <div style={{ marginLeft: '10px', paddingLeft: '15px', borderLeft: '2px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                 <label style={{ fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Règlement</label>
-                                {student.payment !== 'OK' && (student.unpaid_count || 0) >= 1 && (student.sessions_count || 0) < getMaxSessions(student.schedule) && <AlertTriangle size={12} color="#ef4444" />}
+                                {student.payment !== 'OK' && (student.unpaid_count > 0 || student.sessions_count > 0) && <AlertTriangle size={12} color="#ef4444" />}
                               </div>
                               <select
                                 value={student.payment === 'OK' ? 'payer' : (student.payment === 'PARTIAL' ? 'partial' : 'non_payer')}
@@ -1515,7 +1713,7 @@ function App() {
                       </div>
                     );
                   })}
-                {activeStudentsList.filter(s => s.schedule && s.schedule[sessionModal.sessionId] !== false).length === 0 && (
+                {activeStudentsList.filter(s => isSessionScheduled(s, sessionModal.sessionId)).length === 0 && (
                   <p style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem 0', fontWeight: 600 }}>Aucun étudiant programmé pour cette séance.</p>
                 )}
               </div>

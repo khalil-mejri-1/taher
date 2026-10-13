@@ -23,16 +23,26 @@ const studentSchema = new mongoose.Schema({
   isPending: { type: Boolean, default: false },
   attendance: {
     tue_m: { type: Number, default: 0 },
+    tue_a: { type: Number, default: 0 },
     wed_m: { type: Number, default: 0 },
     wed_a: { type: Number, default: 0 },
+    thu_m: { type: Number, default: 0 },
+    thu_a: { type: Number, default: 0 },
+    fri_m: { type: Number, default: 0 },
+    fri_a: { type: Number, default: 0 },
     sat_m: { type: Number, default: 0 },
     sat_a: { type: Number, default: 0 },
     sun_m: { type: Number, default: 0 }
   },
   schedule: {
     tue_m: { type: Boolean, default: true },
+    tue_a: { type: Boolean, default: true },
     wed_m: { type: Boolean, default: true },
     wed_a: { type: Boolean, default: true },
+    thu_m: { type: Boolean, default: true },
+    thu_a: { type: Boolean, default: true },
+    fri_m: { type: Boolean, default: true },
+    fri_a: { type: Boolean, default: true },
     sat_m: { type: Boolean, default: true },
     sat_a: { type: Boolean, default: true },
     sun_m: { type: Boolean, default: true }
@@ -44,7 +54,8 @@ const studentSchema = new mongoose.Schema({
   sessions_count: { type: Number, default: 0 },
   unpaid_count: { type: Number, default: 0 },
   paid_cycles: { type: [Number], default: [] },
-  history: { type: [mongoose.Schema.Types.Mixed], default: [] }
+  history: { type: [mongoose.Schema.Types.Mixed], default: [] },
+  session_log: { type: [mongoose.Schema.Types.Mixed], default: [] }
 }, { 
   timestamps: true,
   toJSON: {
