@@ -30,8 +30,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import './index.css';
 
 
-// const API_URL = "https://taher-three.vercel.app/api";
-const API_URL = "http://localhost:3000/api";
+const API_URL = "https://taher-three.vercel.app/api";
+// const API_URL = "http://localhost:3000/api";
 
 function App() {
   const [students, setStudents] = useState([]);
@@ -1033,7 +1033,7 @@ function App() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '1rem' }}>
-                <button 
+                <button
                   onClick={() => {
                     const dataToExport = students.map(s => ({
                       "الاسم": s.name,
@@ -1048,7 +1048,7 @@ function App() {
                     link.download = `data_eleves_${new Date().toISOString().split('T')[0]}.json`;
                     link.click();
                   }}
-                  className="btn-primary-modern" 
+                  className="btn-primary-modern"
                   style={{ background: 'linear-gradient(135deg, #10b981, #059669)', boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)' }}
                 >
                   <FileJson size={20} /> تحميل ملف JSON
@@ -1056,29 +1056,29 @@ function App() {
               </div>
             </div>
 
-            <div style={{ 
-              position: 'relative', 
-              background: '#0f172a', 
-              borderRadius: '20px', 
+            <div style={{
+              position: 'relative',
+              background: '#0f172a',
+              borderRadius: '20px',
               padding: '2rem',
               boxShadow: 'inset 0 2px 10px rgba(0,0,0,0.5), 0 10px 30px rgba(0,0,0,0.1)',
               border: '1px solid rgba(255,255,255,0.05)'
             }}>
-              <div style={{ 
-                position: 'absolute', 
-                top: '1rem', 
-                right: '2rem', 
-                display: 'flex', 
-                gap: '8px' 
+              <div style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '2rem',
+                display: 'flex',
+                gap: '8px'
               }}>
                 <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f56' }}></div>
                 <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#ffbd2e' }}></div>
                 <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#27c93f' }}></div>
               </div>
-              
-              <pre style={{ 
+
+              <pre style={{
                 margin: 0,
-                color: '#38bdf8', 
+                color: '#38bdf8',
                 fontFamily: '"Fira Code", "JetBrains Mono", monospace',
                 fontSize: '0.95rem',
                 lineHeight: '1.6',

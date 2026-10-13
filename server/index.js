@@ -56,7 +56,7 @@ const studentSchema = new mongoose.Schema({
   paid_cycles: { type: [Number], default: [] },
   history: { type: [mongoose.Schema.Types.Mixed], default: [] },
   session_log: { type: [mongoose.Schema.Types.Mixed], default: [] }
-}, { 
+}, {
   timestamps: true,
   toJSON: {
     virtuals: true,
@@ -72,6 +72,14 @@ const studentSchema = new mongoose.Schema({
 const Student = mongoose.model('Student', studentSchema);
 
 // Routes
+app.get('/api', (req, res) => {
+  res.json({ message: 'API Atelier Taher is running successfully  🚀', status: 'OK' });
+});
+
+app.get('/', (req, res) => {
+  res.json({ message: 'API Atelier Taher is running successfully 🚀', status: 'OK' });
+});
+
 app.get('/api/students', async (req, res) => {
   try {
     const students = await Student.find().sort({ createdAt: -1 });
@@ -94,8 +102,8 @@ app.post('/api/students', async (req, res) => {
 app.put('/api/students/:id', async (req, res) => {
   try {
     const updatedStudent = await Student.findByIdAndUpdate(
-      req.params.id, 
-      req.body, 
+      req.params.id,
+      req.body,
       { new: true, runValidators: true }
     );
     if (!updatedStudent) return res.status(404).json({ error: 'Student not found' });
@@ -151,8 +159,8 @@ app.post('/api/settings', async (req, res) => {
   try {
     const { key, value } = req.body;
     const setting = await Settings.findOneAndUpdate(
-      { key }, 
-      { value }, 
+      { key },
+      { value },
       { upsert: true, new: true }
     );
     res.json(setting.value);
